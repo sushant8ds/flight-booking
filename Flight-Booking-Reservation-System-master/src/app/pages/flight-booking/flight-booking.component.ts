@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { FlightService } from 'src/app/services/Flight/flight.service';
 import { ToastrService } from 'ngx-toastr';
+import { finalize } from 'rxjs/operators'; // <-- ADDED IMPORT
 
 @Component({
   selector: 'app-flight-booking',
@@ -97,28 +98,62 @@ export class FlightBookingComponent implements OnInit {
 
     this.displayModal = true;
 
-    this.flightService.getFlights(newFlightBookingFilterObject).subscribe(
-      (result: any) => {
-        console.log('Fetched: ', result.data);
-        this.flightService.flights.splice(0, this.flightService.flights.length);
-        this.flightService.nextFlights.splice(
-          0,
-          this.flightService.nextFlights.length
-        );
+    this.flightService
+      .getFlights(newFlightBookingFilterObject)
+      .pipe(
+        // --- FIX #1: THIS STOPS THE LOADER ---
+        // This will ALWAYS run, even if there is an error
+        finalize(() => {
+          this.displayModal = false;
+        })
+      )
+      .subscribe(
+        (result: any) => {
+          console.log('Fetched: ', result.data);
 
-        this.flightService.flights.push(...result.data.departureDateFlights);
-        this.flightService.nextFlights.push(
-          ...result.data.afterDepartureDateFlights
-        );
+          // --- FIX #2: SAFELY CHECK THE DATA ---
+          // This checks if result.data is NOT an array and actually has the data you need
+          if (
+            result.data &&
+            !Array.isArray(result.data) &&
+            result.data.departureDateFlights &&
+            result.data.afterDepartureDateFlights
+          ) {
+            this.flightService.flights.splice(
+              0,
+              this.flightService.flights.length
+            );
+            this.flightService.nextFlights.splice(
+              0,
+              this.flightService.nextFlights.length
+            );
 
-        this.displayModal = false;
-        this.router.navigate(['/flights']);
-      },
-      (error) => {
-        this.toastr.error('Error');
-        console.log('Error Occured: ', error.error.msg);
-        this.displayModal = false;
-      }
-    );
+            this.flightService.flights.push(...result.data.departureDateFlights);
+            this.flightService.nextFlights.push(
+              ...result.data.afterDepartureDateFlights
+            );
+
+            this.router.navigate(['/flights']);
+          } else {
+            // This handles the "Fetched: Array(0)" case (no flights found)
+            console.warn('No flights found or data format was incorrect.');
+            this.flightService.flights.splice(
+              0,
+              this.flightService.flights.length
+            );
+            this.flightService.nextFlights.splice(
+              0,
+              this.flightService.nextFlights.length
+            );
+            this.toastr.info('No flights found for this search.');
+          }
+        },
+        (error) => {
+          this.toastr.error('Error');
+          console.log('Error Occured: ', error.error.msg);
+          // We don't need displayModal = false here anymore,
+          // finalize() takes care of it.
+        }
+      );
   }
 }
