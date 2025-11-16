@@ -2,84 +2,56 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const express = require("express");
 const mongoose = require("mongoose");
-const uuid = require("uuid");
 
 // Constants
 const app = express();
+dotenv.config();
 const port = process.env.PORT || 3001;
 
-// Config
-dotenv.config();
+// ------------------ CORS FIX ------------------
+const allowedOrigins = [
+  "https://flight-booking-a4hq.vercel.app", // YOUR FRONTEND ON VERCEL
+  "http://localhost:4200" // for local testing
+];
 
-// 🔥 CORS FIX (Frontend URL added)
-app.use(cors({
-  origin: "https://flight-booking-a4hq.vercel.app",
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+    methods: "GET,POST,PUT,DELETE",
+    allowedHeaders: "Content-Type, Authorization",
+  })
+);
 
-app.options("*", cors());
-
-// Body Parser
+// ------------------ MIDDLEWARE ------------------
 app.use(express.json());
 
-// DB Connection
-mongoose.connect(process.env.MONGODB_URL, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-});
+// ------------------ DATABASE CONNECTION ------------------
+mongoose
+  .connect(process.env.MONGODB_URL, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
+  .then(() => console.log("MongoDB connected!"))
+  .catch((err) => console.log("MongoDB connection error:", err));
 
-const db = mongoose.connection;
-
-db.on("connecting", () => {
-  console.log("connecting to MongoDB...");
-});
-
-db.on("error", (error) => {
-  console.error("Error in MongoDb connection: " + error);
-  mongoose.disconnect();
-});
-
-db.on("connected", () => {
-  console.log("MongoDB connected!");
-});
-
-db.once("open", () => {
-  console.log("MongoDB connection opened!");
-});
-
-db.on("reconnected", () => {
-  console.log("MongoDB reconnected!");
-});
-
-db.on("disconnected", () => {
-  console.log("MongoDB disconnected!");
-  mongoose.connect(process.env.MONGODB_URL, {
-    server: { auto_reconnect: true },
-  });
-});
-
-mongoose.connect(process.env.MONGODB_URL, { 
-  server: { auto_reconnect: true } 
-});
-
-// Components
+// ------------------ ROUTES ------------------
 const authroute = require("./routes/auth");
 const userroute = require("./routes/user");
 const flightroute = require("./routes/flight");
 
 const { authenticateToken } = require("./helpingfunctions/jwt");
 
-// Routes
 app.use("/auth", authroute);
 app.use("/user", authenticateToken, userroute);
 app.use("/flight", authenticateToken, flightroute);
 
+// Base Route
 app.get("/", (req, res) => {
-  res.json({ msg: "Base path for API" });
+  res.json({ msg: "Backend is running!" });
 });
 
-// Starting
+// ------------------ START SERVER ------------------
 app.listen(port, () => {
   console.log(`Server started listening on port ${port}`);
 });
